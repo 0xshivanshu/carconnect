@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 
 function SignIn() {
     const navigate = useNavigate();
+    const apiUrl = import.meta.env.VITE_API_URL;
     const [role, setRole] = useState('user');
     const [isLogin, setIsLogin] = useState(true);
     const [error, setError] = useState(null);
@@ -32,7 +33,7 @@ function SignIn() {
             const endpoint = isLogin ? '/login' : '/register';
             const bodyPayload = isLogin ? { email, password, role } : { name, email, password, role };
 
-            const res = await fetch(`http://localhost:5000/api/auth${endpoint}`, {
+            const res = await fetch(`${apiUrl}api/auth${endpoint}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(bodyPayload)
@@ -57,7 +58,7 @@ function SignIn() {
 
     const handleGoogleSuccess = async (credentialResponse) => {
         try {
-            const res = await fetch('http://localhost:5000/api/auth/google', {
+            const res = await fetch(`${apiUrl}api/auth/google`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ token: credentialResponse.credential, role })

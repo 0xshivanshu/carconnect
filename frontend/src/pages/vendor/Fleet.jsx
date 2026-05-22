@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 
 function VendorFleet() {
     const navigate = useNavigate();
+    const apiUrl = import.meta.env.VITE_API_URL;
     const [vehicles, setVehicles] = useState([]);
 
     const getLocalDateString = (offsetDays = 0) => {
@@ -30,14 +31,14 @@ function VendorFleet() {
     });
 
     const fetchVehicles = async () => {
-        const res = await fetch('http://localhost:5000/api/vendor/vehicles', { headers: getHeaders() });
+        const res = await fetch(`${apiUrl}api/vendor/vehicles`, { headers: getHeaders() });
         if (res.ok) setVehicles(await res.json());
     };
 
     const handleAddVehicle = async (e) => {
         e.preventDefault();
         try {
-            const res = await fetch('http://localhost:5000/api/vendor/vehicles', {
+            const res = await fetch(`${apiUrl}api/vendor/vehicles`, {
                 method: 'POST',
                 headers: getHeaders(),
                 body: JSON.stringify(formData)

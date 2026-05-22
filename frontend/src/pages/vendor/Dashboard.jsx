@@ -4,6 +4,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 
 function VendorDashboard() {
     const navigate = useNavigate();
+    const apiUrl = import.meta.env.VITE_API_URL;
     const [vehicles, setVehicles] = useState([]);
     const [orders, setOrders] = useState([]);
 
@@ -18,12 +19,12 @@ function VendorDashboard() {
     const getHeaders = () => ({ 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` });
 
     const fetchVehicles = async () => {
-        const res = await fetch('http://localhost:5000/api/vendor/vehicles', { headers: getHeaders() });
+        const res = await fetch(`${apiUrl}api/vendor/vehicles`, { headers: getHeaders() });
         if (res.ok) setVehicles(await res.json());
     };
 
     const fetchOrders = async () => {
-        const res = await fetch('http://localhost:5000/api/vendor/orders', { headers: getHeaders() });
+        const res = await fetch(`${apiUrl}api/vendor/orders`, { headers: getHeaders() });
         if (res.ok) setOrders(await res.json());
     };
 

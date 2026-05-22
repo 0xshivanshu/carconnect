@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 
 function UserDashboard() {
     const navigate = useNavigate();
+    const apiUrl = import.meta.env.VITE_API_URL;
     const [orders, setOrders] = useState([]);
     const [profile, setProfile] = useState({ name: '', email: '', _id: '' });
 
@@ -24,13 +25,13 @@ function UserDashboard() {
     };
 
     const fetchOrders = async () => {
-        const res = await fetch('http://localhost:5000/api/user/orders', { headers: getHeaders() });
+        const res = await fetch(`${apiUrl}api/user/orders`, { headers: getHeaders() });
         if (res.ok) setOrders(await res.json());
     };
 
     const handleUpdateProfile = async (e) => {
         e.preventDefault();
-        const res = await fetch('http://localhost:5000/api/user/profile', {
+        const res = await fetch(`${apiUrl}api/user/profile`, {
             method: 'PUT',
             headers: getHeaders(),
             body: JSON.stringify({ name: profile.name })
@@ -45,7 +46,7 @@ function UserDashboard() {
     };
 
     const handleRate = async (vehicleId, rating) => {
-        const res = await fetch(`http://localhost:5000/api/user/vehicles/${vehicleId}/rate`, {
+        const res = await fetch(`${apiUrl}api/user/vehicles/${vehicleId}/rate`, {
             method: 'POST',
             headers: getHeaders(),
             body: JSON.stringify({ rating })

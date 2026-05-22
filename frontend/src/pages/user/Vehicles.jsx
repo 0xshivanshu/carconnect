@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 function Vehicles() {
+    const apiUrl = import.meta.env.VITE_API_URL;
     const [vehicles, setVehicles] = useState([]);
     const [selectedVehicle, setSelectedVehicle] = useState(null);
     const navigate = useNavigate();
@@ -22,7 +23,7 @@ function Vehicles() {
                 if (routerLocation.state.searchDates.end) setEndDate(routerLocation.state.searchDates.end.split('T')[0]);
             }
         } else {
-            fetch('http://localhost:5000/api/user/vehicles')
+            fetch(`${apiUrl}api/user/vehicles`)
                 .then(res => res.json())
                 .then(data => setVehicles(data))
                 .catch(err => console.error(err));
@@ -52,7 +53,7 @@ function Vehicles() {
 
     const finalizeBooking = async (payload, token) => {
         try {
-            const res = await fetch('http://localhost:5000/api/user/book', {
+            const res = await fetch(`${apiUrl}api/user/book`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -117,7 +118,7 @@ function Vehicles() {
         const { token, totalCost } = valid;
 
         try {
-            const rpRes = await fetch('http://localhost:5000/api/user/create-order', {
+            const rpRes = await fetch(`${apiUrl}api/user/create-order`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({ amount: totalCost })
@@ -148,7 +149,7 @@ function Vehicles() {
         }
 
         try {
-            const rpRes = await fetch('http://localhost:5000/api/user/create-order', {
+            const rpRes = await fetch(`${apiUrl}api/user/create-order`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({ amount: totalCost })
