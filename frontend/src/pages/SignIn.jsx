@@ -15,13 +15,10 @@ function SignIn() {
 
     const handleAuthResult = (res, data) => {
         if (res.ok) {
-            localStorage.setItem('user', JSON.stringify(data.user));
+            const sessionRole = role === 'vendor' ? 'vendor' : 'user';
+            localStorage.setItem('user', JSON.stringify({ ...data.user, role: sessionRole }));
             localStorage.setItem('token', data.token);
-            if (data.user.role === 'vendor') {
-                window.location.href = '/vendor/dashboard';
-            } else {
-                window.location.href = '/user/dashboard';
-            }
+            window.location.href = sessionRole === 'vendor' ? '/vendor/dashboard' : '/user/dashboard';
         } else {
             setError(data.message || 'Unknown Server Error');
         }

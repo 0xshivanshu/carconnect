@@ -1,27 +1,25 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { resolveVehicleImage } from '../../utils/vehicleImage';
+import VehicleSilhouette from '../../components/VehicleSilhouette';
+import StarRating from '../../components/StarRating';
 
 function Vehicles() {
     const apiUrl = import.meta.env.VITE_API_URL;
     const [vehicles, setVehicles] = useState([]);
-    const [selectedVehicle, setSelectedVehicle] = useState(null);
+    const [imageUrls, setImageUrls] = useState({});
+    const [detailsVehicle, setDetailsVehicle] = useState(null);
+    const [filtersOpen, setFiltersOpen] = useState(true);
+    const [selectedTypes, setSelectedTypes] = useState([]);
+    const [selectedTransmissions, setSelectedTransmissions] = useState([]);
+    const [priceSort, setPriceSort] = useState('');
+    const [yearSort, setYearSort] = useState('');
     const navigate = useNavigate();
     const routerLocation = useLocation();
-
-    // Checkout form
-    const [startDate, setStartDate] = useState('');
-    const [endDate, setEndDate] = useState('');
-    const [pickupLocation, setPickupLocation] = useState('');
-    const [pickupDistrict, setPickupDistrict] = useState('');
 
     useEffect(() => {
         if (routerLocation.state?.searchResults) {
             setVehicles(routerLocation.state.searchResults);
-            if (routerLocation.state?.searchDates) {
-                // Ensure date format extraction
-                if (routerLocation.state.searchDates.start) setStartDate(routerLocation.state.searchDates.start.split('T')[0]);
-                if (routerLocation.state.searchDates.end) setEndDate(routerLocation.state.searchDates.end.split('T')[0]);
-            }
         } else {
             fetch(`${apiUrl}api/user/vehicles`)
                 .then(res => res.json())
@@ -30,266 +28,332 @@ function Vehicles() {
         }
     }, [routerLocation.state]);
 
-    const loadRazorpayScript = () => {
-        return new Promise((resolve) => {
-            const script = document.createElement('script');
-            script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-            script.onload = () => resolve(true);
-            script.onerror = () => resolve(false);
-            document.body.appendChild(script);
+    const toggleType = (type) => {
+        setSelectedTypes(prev => prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type]);
+    };
+
+    const toggleTransmission = (transmission) => {
+        setSelectedTransmissions(prev => prev.includes(transmission) ? prev.filter(t => t !== transmission) : [...prev, transmission]);
+    };
+
+    const applyFilters = () => {
+        setFiltersOpen(false);
+    };
+
+    const visibleVehicles = useMemo(() => {
+        let result = [...vehicles];
+
+        if (selectedTypes.length > 0) {
+            result = result.filter(v => selectedTypes.includes(v.type));
+        }
+        if (selectedTransmissions.length > 0) {
+            result = result.filter(v => selectedTransmissions.includes(v.transmission));
+        }
+
+        if (priceSort === 'low-high') result.sort((a, b) => a.pricePerDay - b.pricePerDay);
+        if (priceSort === 'high-low') result.sort((a, b) => b.pricePerDay - a.pricePerDay);
+
+        if (yearSort === 'newest') result.sort((a, b) => new Date(b.availableFrom || 0) - new Date(a.availableFrom || 0));
+        if (yearSort === 'oldest') result.sort((a, b) => new Date(a.availableFrom || 0) - new Date(b.availableFrom || 0));
+
+        return result;
+    }, [vehicles, selectedTypes, selectedTransmissions, priceSort, yearSort]);
+
+    const getResolvedImage = (vehicle) => imageUrls[vehicle._id] || null;
+
+    useEffect(() => {
+        let cancelled = false;
+        visibleVehicles.forEach(vehicle => {
+            if (imageUrls[vehicle._id] === undefined) {
+                resolveVehicleImage(vehicle).then(url => {
+                    if (!cancelled) setImageUrls(prev => ({ ...prev, [vehicle._id]: url }));
+                });
+            }
+        });
+        return () => { cancelled = true; };
+    }, [visibleVehicles]);
+
+    const openBooking = (vehicle) => {
+        navigate('/checkout', {
+            state: {
+                vehicle,
+                startDate: routerLocation.state?.searchDates?.start?.split('T')[0] || '',
+                endDate: routerLocation.state?.searchDates?.end?.split('T')[0] || '',
+                pickupDistrict: vehicle.district || '',
+                pickupLocation: vehicle.location || ''
+            }
         });
     };
 
-    const getBookingPayload = (totalCost) => {
-        return {
-            vehicleId: selectedVehicle._id,
-            startDate,
-            endDate,
-            pickupLocation,
-            pickupDistrict,
-            totalCost
-        };
+    const getAvgRating = (vehicle) => {
+        const ratingArr = vehicle.ratings || [];
+        return ratingArr.length ? (ratingArr.reduce((a, b) => a + b.rating, 0) / ratingArr.length).toFixed(1) : 'New';
     };
 
-    const finalizeBooking = async (payload, token) => {
-        try {
-            const res = await fetch(`${apiUrl}api/user/book`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify(payload)
-            });
-
-            if (res.ok) {
-                alert("Payment verified. Booking Confirmed Successfully!");
-                navigate('/user/dashboard');
-            } else {
-                const error = await res.json().catch(() => ({ message: 'Server crashed' }));
-                alert(`Booking Finalization Failed: ${error.message}`);
-            }
-        } catch (err) {
-            alert(`Network Error: ${err.message}`);
-        }
-    };
-
-    const getCostAndValidate = () => {
-        if (!startDate || !endDate || !pickupDistrict || !pickupLocation) {
-            alert("Please fill out all booking fields completely.");
-            return null;
-        }
-        const token = localStorage.getItem('token');
-        const rawUser = localStorage.getItem('user');
-
-        if (!token || !rawUser) {
-            alert("Please log in first to proceed with booking!");
-            navigate('/signIn');
-            return null;
-        }
-
-        if (JSON.parse(rawUser).role === 'vendor') {
-            alert("Vendors cannot book cars. Please Sign In with a 'User' account.");
-            return null;
-        }
-
-        const start = new Date(startDate);
-        const end = new Date(endDate);
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-
-        if (start < today) {
-            alert("Validation Error: You cannot book a pickup date in the past.");
-            return null;
-        }
-        if (end < start) {
-            alert("Validation Error: Your return date cannot be before your pickup date.");
-            return null;
-        }
-
-        const days = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
-        const finalDays = days > 0 ? days : 1;
-        return { token, totalCost: finalDays * selectedVehicle.pricePerDay };
-    };
-
-    const handleSimulatedPayment = async () => {
-        const valid = getCostAndValidate();
-        if (!valid) return;
-        const { token, totalCost } = valid;
-
-        try {
-            const rpRes = await fetch(`${apiUrl}api/user/create-order`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ amount: totalCost })
-            });
-            const orderData = await rpRes.json();
-
-            const isConfirmed = window.confirm(`Simulating Razorpay Payment UI Checkout\n\nGateway: Razorpay\nAmount: ₹${totalCost}\nOrder ID: ${orderData.id}\n\nClick OK to simulate a successful payment authorization.`);
-            if (!isConfirmed) {
-                alert("Simulated Payment cancelled.");
-                return;
-            }
-
-            await finalizeBooking(getBookingPayload(totalCost), token);
-        } catch (err) {
-            alert(`Simulation Error: ${err.message}`);
-        }
-    };
-
-    const handleRazorpayPayment = async () => {
-        const valid = getCostAndValidate();
-        if (!valid) return;
-        const { token, totalCost } = valid;
-
-        const res = await loadRazorpayScript();
-        if (!res) {
-            alert('Razorpay SDK failed to load. Are you online?');
-            return;
-        }
-
-        try {
-            const rpRes = await fetch(`${apiUrl}api/user/create-order`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ amount: totalCost })
-            });
-            const orderData = await rpRes.json();
-
-            if (orderData.id && orderData.id.startsWith("simulated_order_")) {
-                alert("Razorpay is not fully configured in your .env backend. Attempting to fall back to Simulated Checkout logic. Please provide RAZORPAY_KEY_ID to the backend and VITE_RAZORPAY_KEY_ID to the frontend completely.");
-            }
-
-            const options = {
-                key: import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_test_mockkeyonly', // Enter the Key ID generated from the Dashboard
-                amount: orderData.amount, // Amount is in currency subunits. Default currency is INR.
-                currency: orderData.currency || "INR",
-                name: "CarConnectPortal",
-                description: `Booking: ${selectedVehicle.brand} ${selectedVehicle.name}`,
-                image: selectedVehicle.image || "https://placehold.co/100x100",
-                order_id: orderData.id,
-                handler: async function (response) {
-                    // Payment succeeded!
-                    const payload = getBookingPayload(totalCost);
-                    Object.assign(payload, {
-                        razorpay_payment_id: response.razorpay_payment_id,
-                        razorpay_order_id: response.razorpay_order_id,
-                        razorpay_signature: response.razorpay_signature
-                    });
-                    await finalizeBooking(payload, token);
-                },
-                prefill: {
-                    name: JSON.parse(localStorage.getItem('user')).name,
-                    email: JSON.parse(localStorage.getItem('user')).email,
-                    contact: "9999999999"
-                },
-                theme: {
-                    color: "#16a34a"
-                }
-            };
-
-            const paymentObject = new window.Razorpay(options);
-            paymentObject.on('payment.failed', function (response) {
-                alert(`Payment Failed: ${response.error.description}`);
-            });
-            paymentObject.open();
-
-        } catch (err) {
-            alert(`Razorpay Session Error: ${err.message}`);
-        }
-    };
+    const MetaIcon = ({ children }) => (
+        <svg className="w-4 h-4 text-slate-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            {children}
+        </svg>
+    );
 
     return (
-        <div className="container mx-auto p-4 md:p-8">
-            <h1 className="text-4xl font-bold mb-8">Available Vehicles</h1>
+        <div className="container mx-auto px-4 md:px-8 py-12 max-w-[1500px]">
+            <div className="flex flex-col lg:flex-row gap-10">
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                {vehicles.length === 0 ? <p className="text-gray-500">No vehicles available at the moment.</p> : vehicles.map(vehicle => {
-
-                    const ratingArr = vehicle.ratings || [];
-                    const avgRating = ratingArr.length ? (ratingArr.reduce((a, b) => a + b.rating, 0) / ratingArr.length).toFixed(1) : 'New';
-
-                    return (
-                        <div key={vehicle._id} className="border p-4 rounded-xl shadow-sm hover:shadow-lg transition flex flex-col bg-white">
-                            <img src={vehicle.image || "https://placehold.co/600x400?text=No+Image"} alt={vehicle.name} className="w-full h-56 object-cover rounded-md mb-4" />
-                            <div className="flex justify-between items-start mb-1">
-                                <h2 className="text-2xl font-bold">{vehicle.brand} {vehicle.name}</h2>
-                                <div className="bg-yellow-50 text-yellow-600 font-bold px-2 py-1 rounded text-sm flex items-center gap-1 border border-yellow-100">
-                                    ⭐ {avgRating}
-                                </div>
-                            </div>
-
-                            <p className="text-gray-600 font-medium mb-1">{vehicle.type} • {vehicle.transmission} • {vehicle.fuelType}</p>
-                            <p className="text-gray-500 text-sm mb-2">Location: {vehicle.location}, {vehicle.district}</p>
-                            {vehicle.availableFrom && vehicle.availableUntil && (
-                                <p className="text-[11px] font-black text-blue-700 bg-blue-100 inline-block px-2 py-1 rounded border border-blue-200 uppercase tracking-widest mb-1 mt-1">
-                                    Available: {new Date(vehicle.availableFrom).toLocaleDateString()} to {new Date(vehicle.availableUntil).toLocaleDateString()}
-                                </p>
-                            )}
-                            <p className="text-2xl font-black mb-4 mt-2">₹{vehicle.pricePerDay} <span className="text-sm font-normal text-gray-500">/ day</span></p>
-                            <button onClick={() => {
-                                setSelectedVehicle(vehicle);
-                                setPickupLocation(vehicle.location || '');
-                                setPickupDistrict(vehicle.district || '');
-                            }} className="bg-black text-white font-bold px-4 py-3 rounded-md mt-auto hover:bg-gray-800 transition shadow-md">Book Now</button>
+                {/* Left Sidebar: Filter Panel */}
+                <aside className="w-full lg:w-72 shrink-0">
+                    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden sticky top-28">
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+                            <h2 className="text-lg font-bold text-slate-800">Filters</h2>
+                            <button
+                                onClick={() => setFiltersOpen(!filtersOpen)}
+                                className="w-8 h-8 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-800 transition flex items-center justify-center text-lg font-bold"
+                                aria-label={filtersOpen ? "Collapse filters" : "Expand filters"}
+                            >
+                                {filtersOpen ? '−' : '+'}
+                            </button>
                         </div>
-                    )
-                })}
+
+                        {filtersOpen && (
+                            <div className="px-6 py-4 space-y-6">
+                                {/* Type accordion */}
+                                <div>
+                                    <p className="font-bold text-sm uppercase tracking-wider text-slate-500 mb-3">Type</p>
+                                    <div className="space-y-2.5">
+                                        {['SUV', 'Sedan', 'Hatchback'].map(type => (
+                                            <label key={type} className="flex items-center gap-3 cursor-pointer group">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedTypes.includes(type)}
+                                                    onChange={() => toggleType(type)}
+                                                    className="w-4 h-4 rounded border-slate-300 text-slate-900 focus:ring-slate-900 cursor-pointer"
+                                                />
+                                                <span className="text-sm font-medium text-slate-700 group-hover:text-slate-900 capitalize">{type}</span>
+                                            </label>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Transmission accordion */}
+                                <div>
+                                    <p className="font-bold text-sm uppercase tracking-wider text-slate-500 mb-3">Transmission</p>
+                                    <div className="space-y-2.5">
+                                        {['Automatic', 'Manual'].map(transmission => (
+                                            <label key={transmission} className="flex items-center gap-3 cursor-pointer group">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedTransmissions.includes(transmission)}
+                                                    onChange={() => toggleTransmission(transmission)}
+                                                    className="w-4 h-4 rounded border-slate-300 text-slate-900 focus:ring-slate-900 cursor-pointer"
+                                                />
+                                                <span className="text-sm font-medium text-slate-700 group-hover:text-slate-900 capitalize">{transmission}</span>
+                                            </label>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <button
+                                    onClick={applyFilters}
+                                    className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-3 rounded-xl transition shadow-md mt-2"
+                                >
+                                    Apply
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                </aside>
+
+                {/* Main Content Area */}
+                <main className="flex-1 min-w-0">
+                    {/* Top Bar */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+                        <h1 className="text-2xl md:text-3xl font-black text-slate-900">
+                            Available Vehicles <span className="text-slate-400 font-bold text-lg">({visibleVehicles.length})</span>
+                        </h1>
+                        <div className="flex gap-3">
+                            <select
+                                value={priceSort}
+                                onChange={e => setPriceSort(e.target.value)}
+                                className="border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-medium text-slate-700 bg-white shadow-sm focus:ring-2 focus:ring-slate-900 focus:outline-none cursor-pointer"
+                            >
+                                <option value="">Price</option>
+                                <option value="low-high">Price: Low to High</option>
+                                <option value="high-low">Price: High to Low</option>
+                            </select>
+                            <select
+                                value={yearSort}
+                                onChange={e => setYearSort(e.target.value)}
+                                className="border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-medium text-slate-700 bg-white shadow-sm focus:ring-2 focus:ring-slate-900 focus:outline-none cursor-pointer"
+                            >
+                                <option value="">Year</option>
+                                <option value="newest">Newest First</option>
+                                <option value="oldest">Oldest First</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    {/* Vehicle Grid */}
+                    {visibleVehicles.length === 0 ? (
+                        routerLocation.state?.searchArea ? (
+                            <div className="bg-white rounded-2xl border border-dashed border-slate-300 shadow-sm p-12 md:p-16 text-center">
+                                <p className="text-xl font-bold text-slate-700">No vehicles in this area</p>
+                                <p className="text-slate-400 font-medium mt-2 max-w-md mx-auto">
+                                    We don't have any cars available in {routerLocation.state.searchArea.location ? `${routerLocation.state.searchArea.location}, ` : ''}{routerLocation.state.searchArea.district} for your selected dates. Try another city or adjust your dates.
+                                </p>
+                            </div>
+                        ) : (
+                            <p className="text-gray-500">No vehicles match your filters at the moment.</p>
+                        )
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-x-10 gap-y-14">
+                            {visibleVehicles.map(vehicle => (
+                                <div key={vehicle._id} className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1 transition flex flex-col overflow-hidden">
+                                    {/* Image Container */}
+                                    <div className="p-7 pb-0">
+                                        <div className="aspect-[3/2] bg-slate-100 rounded-xl overflow-hidden">
+                                            {getResolvedImage(vehicle) ? (
+                                                <img
+                                                    src={getResolvedImage(vehicle)}
+                                                    alt={`${vehicle.brand} ${vehicle.name}`}
+                                                    loading="lazy"
+                                                    className="w-full h-full object-contain p-5 hover:scale-105 transition duration-300"
+                                                />
+                                            ) : (
+                                                <VehicleSilhouette type={vehicle.type} className="w-full h-full p-10 text-slate-300" />
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <div className="p-9 pt-8 flex flex-col flex-1">
+                                        {/* Title & Pricing Row */}
+                                        <div className="flex items-center justify-between gap-4 mb-8">
+                                            <h2 className="text-xl font-bold text-slate-900 truncate">{vehicle.brand} {vehicle.name}</h2>
+                                            <p className="text-lg font-black text-slate-900 shrink-0">
+                                                ₹{vehicle.pricePerDay}
+                                                <span className="text-xs font-normal text-slate-400">/day</span>
+                                            </p>
+                                        </div>
+
+                                        {/* Metadata Section */}
+                                        <div className="grid grid-cols-2 gap-y-7 gap-x-4 mb-9">
+                                            <div className="flex items-center gap-3 min-w-0">
+                                                <MetaIcon>
+                                                    <path d="M12 3l9 5v8l-9 5-9-5V8l9-5z" />
+                                                    <path d="M12 3v22" />
+                                                </MetaIcon>
+                                                <span className="text-sm font-medium text-slate-600 truncate capitalize">{vehicle.brand}</span>
+                                            </div>
+                                            <div className="flex items-center gap-3 min-w-0">
+                                                <MetaIcon>
+                                                    <circle cx="12" cy="7" r="4" />
+                                                    <path d="M4 21c0-4 3.6-7 8-7s8 3 8 7" />
+                                                </MetaIcon>
+                                                <span className="text-sm font-medium text-slate-600 truncate">{vehicle.seats} Seats</span>
+                                            </div>
+                                            <div className="flex items-center gap-3 min-w-0">
+                                                <MetaIcon>
+                                                    <path d="M5 17H3v-5l2-5h14l2 5v5h-2" />
+                                                    <circle cx="7" cy="17" r="2" />
+                                                    <circle cx="17" cy="17" r="2" />
+                                                    <path d="M9 17h6" />
+                                                </MetaIcon>
+                                                <span className="text-sm font-medium text-slate-600 truncate capitalize">{vehicle.type}</span>
+                                            </div>
+                                            <div className="flex items-center gap-3 min-w-0">
+                                                <MetaIcon>
+                                                    <path d="M4 22V10a8 8 0 0 1 16 0v12" />
+                                                    <path d="M2 22h20" />
+                                                    <path d="M9 10h6" />
+                                                </MetaIcon>
+                                                <span className="text-sm font-medium text-slate-600 truncate capitalize">{vehicle.fuelType}</span>
+                                            </div>
+                                        </div>
+
+                                        {/* Card Footer */}
+                                        <div className="grid grid-cols-2 gap-6 mt-auto">
+                                            <button
+                                                onClick={() => openBooking(vehicle)}
+                                                className="bg-slate-900 hover:bg-slate-800 text-white font-bold py-4 rounded-xl transition shadow-md text-sm"
+                                            >
+                                                Book Ride
+                                            </button>
+                                            <button
+                                                onClick={() => setDetailsVehicle(vehicle)}
+                                                className="border border-slate-300 text-slate-700 hover:bg-slate-50 font-bold py-4 rounded-xl transition text-sm"
+                                            >
+                                                Details
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </main>
             </div>
 
-            {selectedVehicle && (
-                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 z-50 transition-opacity duration-300">
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl overflow-hidden flex flex-col border border-white/20 transform transition-all">
-                        {/* Immersive Dark Image Header */}
-                        <div className="h-32 w-full relative bg-slate-800">
-                            <img src={selectedVehicle.image || "https://placehold.co/600x400"} className="w-full h-full object-cover opacity-70" />
-                            <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/40 to-transparent"></div>
-                            <button onClick={() => setSelectedVehicle(null)} className="absolute top-4 right-4 text-white/70 hover:text-white bg-black/20 hover:bg-black/50 rounded-full w-8 h-8 flex items-center justify-center transition font-bold">✕</button>
-                            <div className="absolute bottom-4 left-6">
-                                <p className="text-emerald-400 font-bold text-xs uppercase tracking-widest mb-1 shadow-sm">Checkout Booking</p>
-                                <h2 className="text-3xl font-black text-white drop-shadow-md">{selectedVehicle.brand} {selectedVehicle.name}</h2>
+            {/* Details Modal */}
+            {detailsVehicle && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 z-50">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border border-white/20">
+                        <div className="relative bg-slate-100">
+                            {getResolvedImage(detailsVehicle) ? (
+                                <img src={getResolvedImage(detailsVehicle)} alt={detailsVehicle.name} className="w-full h-56 object-cover" />
+                            ) : (
+                                <div className="w-full h-56 flex items-center justify-center">
+                                    <VehicleSilhouette type={detailsVehicle.type} className="w-64 h-40 text-slate-300" />
+                                </div>
+                            )}
+                            <button
+                                onClick={() => setDetailsVehicle(null)}
+                                className="absolute top-4 right-4 text-white/70 hover:text-white bg-black/30 hover:bg-black/60 rounded-full w-9 h-9 flex items-center justify-center transition font-bold"
+                            >
+                                ✕
+                            </button>
+                            <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-slate-900 to-transparent px-6 pt-10 pb-4">
+                                <h2 className="text-2xl font-black text-white">{detailsVehicle.brand} {detailsVehicle.name}</h2>
+                                <p className="text-white/80 text-sm font-medium">
+                                    {detailsVehicle.location}, {detailsVehicle.district}
+                                </p>
                             </div>
                         </div>
-
-                        <div className="p-6 md:p-8 bg-slate-50">
-                            <form className="flex flex-col gap-5">
-                                <div className="flex gap-4">
-                                    <div className="w-full">
-                                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Pickup Date</label>
-                                        <input type="date" required value={startDate} onChange={e => setStartDate(e.target.value)} className="border border-slate-200 p-3 rounded-lg w-full mt-1 focus:ring-2 focus:ring-emerald-500 focus:outline-none transition shadow-sm bg-white" />
-                                    </div>
-                                    <div className="w-full">
-                                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Return Date</label>
-                                        <input type="date" required value={endDate} onChange={e => setEndDate(e.target.value)} className="border border-slate-200 p-3 rounded-lg w-full mt-1 focus:ring-2 focus:ring-emerald-500 focus:outline-none transition shadow-sm bg-white" />
-                                    </div>
-                                </div>
-                                <div className="flex gap-4">
-                                    <div className="w-full">
-                                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">District</label>
-                                        <input type="text" required placeholder="e.g. Mumbai" value={pickupDistrict} onChange={e => setPickupDistrict(e.target.value)} className="border border-slate-200 p-3 rounded-lg w-full mt-1 bg-slate-100 text-slate-600 font-medium" readOnly />
-                                    </div>
-                                    <div className="w-full">
-                                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Specific Area</label>
-                                        <input type="text" required placeholder="e.g. Bandra West" value={pickupLocation} onChange={e => setPickupLocation(e.target.value)} className="border border-slate-200 p-3 rounded-lg w-full mt-1 bg-slate-100 text-slate-600 font-medium" readOnly />
-                                    </div>
-                                </div>
-
-                                <div className="bg-white p-5 rounded-xl border border-slate-200 flex justify-between items-center text-lg shadow-sm mt-2">
-                                    <span className="font-bold text-slate-600">Total Estimate:</span>
-                                    <span className="font-black text-emerald-600 text-3xl">
-                                        ₹{startDate && endDate ? (selectedVehicle.pricePerDay * Math.max(1, Math.ceil((new Date(endDate) - new Date(startDate)) / (1000 * 60 * 60 * 24)))).toLocaleString() : 0}
-                                    </span>
-                                </div>
-
-                                <div className="flex flex-col gap-3 mt-4">
-                                    <button type="button" onClick={handleRazorpayPayment} className="w-full bg-slate-900 border border-slate-800 text-white font-bold py-4 rounded-xl hover:bg-slate-800 transition shadow-lg text-lg flex justify-center items-center gap-2">
-                                        <span className="text-blue-400">⚡</span> Pay Securely with Razorpay
-                                    </button>
-                                    <button type="button" onClick={handleSimulatedPayment} className="w-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold py-4 rounded-xl hover:bg-emerald-100 transition shadow-sm text-md">
-                                        Simulate Dev Checkout
-                                    </button>
-                                </div>
-                            </form>
+                        <div className="p-6">
+                            <div className="flex items-center justify-between mb-4">
+                                <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Rating</span>
+                                <span className="inline-flex items-center gap-2">
+                                    {getAvgRating(detailsVehicle) === 'New' ? (
+                                        <span className="font-bold text-slate-400">New</span>
+                                    ) : (
+                                        <>
+                                            <StarRating value={parseFloat(getAvgRating(detailsVehicle))} size="w-4 h-4" />
+                                            <span className="font-black text-slate-800">{getAvgRating(detailsVehicle)}</span>
+                                        </>
+                                    )}
+                                </span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-y-3 gap-x-4 text-sm mb-5">
+                                <span className="font-semibold text-slate-500">Type</span>
+                                <span className="font-bold text-slate-800 capitalize">{detailsVehicle.type}</span>
+                                <span className="font-semibold text-slate-500">Transmission</span>
+                                <span className="font-bold text-slate-800 capitalize">{detailsVehicle.transmission}</span>
+                                <span className="font-semibold text-slate-500">Fuel Type</span>
+                                <span className="font-bold text-slate-800 capitalize">{detailsVehicle.fuelType}</span>
+                                <span className="font-semibold text-slate-500">Seats</span>
+                                <span className="font-bold text-slate-800">{detailsVehicle.seats}</span>
+                                <span className="font-semibold text-slate-500">Price</span>
+                                <span className="font-black text-slate-800">₹{detailsVehicle.pricePerDay}<span className="text-xs font-normal text-slate-400">/day</span></span>
+                            </div>
+                            {detailsVehicle.availableFrom && detailsVehicle.availableUntil && (
+                                <p className="text-[11px] font-black text-blue-700 bg-blue-100 inline-block px-2 py-1 rounded border border-blue-200 uppercase tracking-widest mb-5">
+                                    Available: {new Date(detailsVehicle.availableFrom).toLocaleDateString()} to {new Date(detailsVehicle.availableUntil).toLocaleDateString()}
+                                </p>
+                            )}
+                            <button
+                                onClick={() => openBooking(detailsVehicle)}
+                                className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-3.5 rounded-xl transition shadow-md"
+                            >
+                                Book Ride
+                            </button>
                         </div>
                     </div>
                 </div>

@@ -29,8 +29,8 @@ function Header() {
                 </div>
             </Link>
             <div className="hidden lg:block">
-                <ul className="flex list-none items-center">
-                    {navLinks.map((navlink, index) => {
+                <ul className="flex list-none items-center gap-8">
+                    {navLinks.map((navlink) => {
                         let finalPath = navlink.path;
                         let finalTitle = navlink.title;
                         if (isVendor && navlink.path === '/vehicles') {
@@ -39,7 +39,7 @@ function Header() {
                         }
                         const isActive = location.pathname === finalPath;
                         return (
-                            <li key={index} className={`${index !== navLinks.length - 1 ? "mx-4" : "mx-0"}`}>
+                            <li key={navlink.id}>
                                 <Link to={finalPath} className={`text-black font-poppins cursor-pointer font-semibold transition ${activeTextColor} ${isActive ? 'border-b-2 border-black pb-1' : ''}`}>
                                     {finalTitle}
                                 </Link>
@@ -47,7 +47,7 @@ function Header() {
                         )
                     })}
                     {currentUser && (
-                        <li className="ml-8">
+                        <li>
                             <Link to={dashboardPath} className={`text-black font-poppins cursor-pointer font-black transition ${activeHoverColor} ${isDashboardActive ? 'border-b-[3px] border-black pb-1' : ''}`}>
                                 Dashboard
                             </Link>

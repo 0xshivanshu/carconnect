@@ -23,7 +23,7 @@ function Footer() {
                         <div>
                             <h3 className="font-semibold text-sm mb-4 text-gray-300">FOLLOW US</h3>
                             <ul className="flex flex-col gap-3 text-sm text-gray-400">
-                                <li><a href="#" className="hover:text-white transition">Github</a></li>
+                                <li><a href="https://www.github.com/0xShivanshu" target="_blank" rel="noopener noreferrer" className="hover:text-white transition">Github</a></li>
                             </ul>
                         </div>
 
@@ -40,8 +40,8 @@ function Footer() {
                 <div className="border-t border-gray-800 pt-8 flex flex-col md:flex-row justify-between items-center text-sm text-gray-500">
                     <p>© 2026 CarConnectPortal. All Rights Reserved.</p>
                     <div className="flex gap-4 mt-4 md:mt-0">
-                        <a href="#" className="hover:text-white transition">LinkedIn</a>
-                        <a href="#" className="hover:text-white transition">GitHub</a>
+                        <a href="https://www.linkedin.com/in/shivshekhar0" target="_blank" rel="noopener noreferrer" className="hover:text-white transition">LinkedIn</a>
+                        <a href="https://www.github.com/0xShivanshu" target="_blank" rel="noopener noreferrer" className="hover:text-white transition">GitHub</a>
                     </div>
                 </div>
             </div>

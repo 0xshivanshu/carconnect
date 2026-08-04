@@ -6,6 +6,7 @@ import VendorDashboard from "./pages/vendor/Dashboard";
 import VendorFleet from "./pages/vendor/Fleet";
 import UserDashboard from "./pages/user/Dashboard";
 import Vehicles from "./pages/user/Vehicles";
+import Checkout from "./pages/user/Checkout";
 import Enterprise from "./pages/Enterprise";
 import Contact from "./pages/Contact";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
@@ -15,6 +16,7 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
+        <Route path="/checkout" element={<Checkout />} />
         <Route element={<With_nav />}>
           <Route path="/" element={<Home />} />
           <Route path="/vehicles" element={<Vehicles />} />
