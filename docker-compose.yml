@@ -3,6 +3,9 @@ services:
     build: ./backend
     container_name: carconnect-backend
     restart: unless-stopped
+    # Bound to loopback only — EC2 host nginx proxies /api to it.
+    ports:
+      - "127.0.0.1:5000:5000"
     environment:
       PORT: 5000
       NODE_ENV: production
@@ -11,25 +14,3 @@ services:
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID}
       RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET}
-    networks:
-      - appnet
-
-  web:
-    build:
-      context: ./frontend
-      args:
-        VITE_API_URL: /
-        VITE_GOOGLE_CLIENT_ID: ${VITE_GOOGLE_CLIENT_ID}
-        VITE_RAZORPAY_KEY_ID: ${VITE_RAZORPAY_KEY_ID}
-    container_name: carconnect-web
-    restart: unless-stopped
-    ports:
-      - "80:80"
-    depends_on:
-      - backend
-    networks:
-      - appnet
-
-networks:
-  appnet:
-    driver: bridge
