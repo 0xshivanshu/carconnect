@@ -26,7 +26,7 @@ export const HeroGrid = () => {
                 {/* Right Image Frame */}
                 <div className="w-full md:w-1/2 relative flex justify-center items-center z-10">
                     <img
-                        src="https://evmwheels.com/front-theme/images/Group%20316.png"
+                        src="https://res.cloudinary.com/u3e9diev/image/upload/v1785889313/mohamed_hassan-car-9669401_1920_hecysw.png"
                         className="w-full max-w-[500px] object-contain drop-shadow-md md:ml-10 transition-transform hover:translate-y-[-5px]"
                         alt="Premium Fleet Selection"
                     />
